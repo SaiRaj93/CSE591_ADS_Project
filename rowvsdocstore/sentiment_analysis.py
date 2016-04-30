@@ -4,7 +4,7 @@ from textblob.sentiments import NaiveBayesAnalyzer
 class Sentiment_Analysis(object):
 	"""Determine the sentiments of the given text"""
 
-	def __init__(self, arg):
+	def __init__(self):
 		pass
 	
 	def get_Sentiment(text):
