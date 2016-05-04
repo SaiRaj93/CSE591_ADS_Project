@@ -2,24 +2,34 @@ import os
 import psycopg2
 from psycopg2 import ProgrammingError
 import sys
+import ast
 
-
+logging = True
+connection_string = "host='localhost' dbname='cse591' user='postgres' password='root'"
+ip_files = ["web_sales","web_returns","warehouse","item","date_dim"]
+connection = None
+cursor = None
 class PriceOptimizationPostgres(object):
     @staticmethod
     def load_data():
+        global connection,ip_files,cursor,connection_string
         try:
-            print("Start")
+            if logging:
+                print("Start")
             # ip_files = ["web_sales","web_returns","warehouse","item","date_dim"]
             # ip_files = ["item"]
-            ip_files = ["web_returns", "date_dim"]
+
             os.chdir("..")
-            print("Opening connection..")
-            connection_string = "host='localhost' dbname='cse591' user='postgres' password='root'"
+            if logging:
+                print("Opening connection..")
+
             connection = psycopg2._connect(connection_string)
             cursor = connection.cursor()
-            print("imporing data..")
+            if logging:
+                print("imporing data..")
             for f in ip_files:
-                print("importing " + f)
+                if logging:
+                    print("importing " + f)
                 ip_file_path = os.path.abspath(os.curdir) + "\input\\" + f + ".dat"
                 '''
                 Folder permissions needed to execute copy_expert. If running on windows system,
@@ -31,16 +41,46 @@ class PriceOptimizationPostgres(object):
                 cursor.copy_expert(query, sys.stdin)
                 connection.commit()
                 # file_to_read.close()
-                print("Finished importing " + f + ". Committed!")
+                if logging:
+                    print("Finished importing " + f + ". Committed!")
 
             return 0
         except ProgrammingError:
-            print("Something went wrong with the COPY function:\n " + ProgrammingError.message)
+            if logging:
+                print("Something went wrong with the COPY function:\n ")
             return 1
         except:
             return 2
 
-    '''
+    @staticmethod
+    def deleteSchema():
+        global connection,ip_files,cursor,connection_string
+        drop_query = "DROP TABLE IF EXISTS "
+        for table in ip_files:
+            drop_query += table+", "
+
+        drop_query += " CASCADE"
+        if connection==None:
+            if logging:
+                print("Opening connection..")
+            connection = psycopg2._connect(connection_string)
+            cursor = connection.cursor()
+        elif cursor == None:
+            cursor = connection.cursor()
+        cursor.execute(drop_query)
+        connection.commit()
+        if logging:
+            print("Tables are deleted!")
+        pass
+
+if __name__ == "__main__":
+    # PriceOptimizationPostgres.load_data()
+    f = "web_sales"
+    ip_file_path = os.path.abspath(os.curdir) + "\input\\" + f + ".dat"
+    query = "COPY " + f + " FROM '" + ip_file_path + "' DELIMITER '|' CSV HEADER"
+    print query
+
+    """
     Following are the queries used to create tables in PostgreSQL database:
 
     create table web_sales
@@ -190,4 +230,19 @@ class PriceOptimizationPostgres(object):
      d_current_year char(1) ,
      primary key (d_date_sk)
     );
-    '''
+
+    # CONSTRAINT modifications:
+
+    alter table web_sales drop constraint web_sales_pkey;
+    alter table web_returns drop constraint web_returns_pkey;
+
+    # COPY queries:
+
+    COPY web_sales FROM  'C:\\Users\\Charan\\IdeaProjects\\CSE591_ADS_Project\\rowvsdocstore\\input\\web_sales.dat'  DELIMITER '|' CSV HEADER;
+    COPY web_returns FROM  'C:\\Users\\Charan\\IdeaProjects\\CSE591_ADS_Project\\rowvsdocstore\\input\\web_returns.dat'  DELIMITER '|' CSV HEADER;
+    COPY warehouse FROM  'C:\\Users\\Charan\\IdeaProjects\\CSE591_ADS_Project\\rowvsdocstore\\input\\warehouse.dat'  DELIMITER '|' CSV HEADER;
+    COPY item FROM  'C:\\Users\\Charan\\IdeaProjects\\CSE591_ADS_Project\\rowvsdocstore\\input\\item.dat'  DELIMITER '|' CSV HEADER;
+    COPY date_dim FROM  'C:\\Users\\Charan\\IdeaProjects\\CSE591_ADS_Project\\rowvsdocstore\\input\\date_dim.dat'  DELIMITER '|' CSV HEADER;
+
+    """
+

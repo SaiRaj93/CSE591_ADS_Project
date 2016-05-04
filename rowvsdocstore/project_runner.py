@@ -10,7 +10,7 @@ class Project_Runner(object):
 	def sentiment_end_to_end(self, file):
 		s_obj = Sentiment_Data_Postgres()
 		s_obj.load_data(file)
-		review = s.obj.get_review('50')
+		review = s_obj.get_review('50')
 		cls = Sentiment_Analysis().get_Sentiment(review)
 		s_obj.delete_schema()
 
@@ -20,5 +20,6 @@ class Project_Runner(object):
 
 
 
-if __name__ = '__main__' :
+if __name__ == '__main__' :
 	# code for running and collecting the statics
+	pass
