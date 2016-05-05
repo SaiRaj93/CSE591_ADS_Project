@@ -1,34 +1,27 @@
 import os
-import psycopg2
-from psycopg2 import ProgrammingError
 import sys
-import ast
 
-logging = True
-connection_string = "host='localhost' dbname='cse591' user='postgres' password='root'"
-ip_files = ["web_sales","web_returns","warehouse","item","date_dim"]
-connection = None
-cursor = None
-class PriceOptimizationPostgres(object):
-    @staticmethod
-    def load_data():
-        global connection,ip_files,cursor,connection_string
+from psycopg2._psycopg import ProgrammingError
+from postgres_connect import Postgres_Connect
+
+class Price_optimization_postgres(object):
+
+    def __init__(self):
+        self.con = Postgres_Connect().getConnection('cse591' , 'postgres', 'localhost', 'root')
+        self.cur = self.con.cursor()
+        self.ip_files = ["web_sales","web_returns","warehouse","item","date_dim"]
+        self.logging = True
+
+    def load_data(self):
+
         try:
-            if logging:
+            if self.logging:
                 print("Start")
-            # ip_files = ["web_sales","web_returns","warehouse","item","date_dim"]
-            # ip_files = ["item"]
-
             os.chdir("..")
-            if logging:
-                print("Opening connection..")
-
-            connection = psycopg2._connect(connection_string)
-            cursor = connection.cursor()
-            if logging:
+            if self.logging:
                 print("imporing data..")
-            for f in ip_files:
-                if logging:
+            for f in self.ip_files:
+                if self.logging:
                     print("importing " + f)
                 ip_file_path = os.path.abspath(os.curdir) + "\input\\" + f + ".dat"
                 '''
@@ -38,47 +31,62 @@ class PriceOptimizationPostgres(object):
                 icacls * /t  /grant Everyone:F
                 '''
                 query = "COPY " + f + " FROM '" + ip_file_path + "' DELIMITER '|' CSV HEADER"
-                cursor.copy_expert(query, sys.stdin)
-                connection.commit()
-                # file_to_read.close()
-                if logging:
+                self.cur.copy_expert(query, sys.stdin)
+                self.con.commit()
+                if self.logging:
                     print("Finished importing " + f + ". Committed!")
-
             return 0
         except ProgrammingError:
-            if logging:
+            if self.logging:
                 print("Something went wrong with the COPY function:\n ")
             return 1
         except:
             return 2
 
-    @staticmethod
-    def deleteSchema():
+    def execute_query(self):
+        query = """SELECT w_state , i_item_id
+                ,sum(case when (cast(d_date as date) <
+                cast ('2001-03-16' as date))
+                then ws_sales_price -
+                     coalesce (wr_refunded_cash ,0)
+                else 0 end)
+                as sales_before
+                ,sum(case when (cast(d_date as date) >=
+                cast ('2001-03-16' as date))
+                then ws_sales_price -
+                     coalesce (wr_refunded_cash ,0)
+                else 0 end) as sales_after
+                FROM
+                web_sales left outer join web_returns on
+                (ws_order_number = wr_order_number
+                                   and ws_item_sk = wr_item_sk)
+                ,warehouse , item , date_dim
+                WHERE
+                i_item_sk = ws_item_sk
+                and ws_warehouse_sk = w_warehouse_sk
+                and ws_sold_date_sk = d_date_sk
+                and d_date between
+                (cast ('2001-03-16' as date) - interval '30
+                day')
+                   and (cast ('2001-03-16' as date) + interval
+                '30 day')
+                GROUP by w_state ,i_item_id
+                ORDER by w_state ,i_item_id;"""
+        self.cur.execute(query)
+        return self.cur.fetchall()
+
+    def delete_schema(self):
         global connection,ip_files,cursor,connection_string
         drop_query = "DROP TABLE IF EXISTS "
         for table in ip_files:
             drop_query += table+", "
 
         drop_query += " CASCADE"
-        if connection==None:
-            if logging:
-                print("Opening connection..")
-            connection = psycopg2._connect(connection_string)
-            cursor = connection.cursor()
-        elif cursor == None:
-            cursor = connection.cursor()
-        cursor.execute(drop_query)
-        connection.commit()
-        if logging:
+        self.cur.execute(drop_query)
+        self.con.commit()
+        if self.logging:
             print("Tables are deleted!")
         pass
-
-if __name__ == "__main__":
-    # PriceOptimizationPostgres.load_data()
-    f = "web_sales"
-    ip_file_path = os.path.abspath(os.curdir) + "\input\\" + f + ".dat"
-    query = "COPY " + f + " FROM '" + ip_file_path + "' DELIMITER '|' CSV HEADER"
-    print query
 
     """
     Following are the queries used to create tables in PostgreSQL database:

@@ -6,8 +6,8 @@ class Sentiment_Analysis(object):
 
 	def __init__(self):
 		pass
-	
-	def get_Sentiment(text):
+
+	def get_Sentiment(self, text):
 		"""Returns a string that determines the classification of the given text, namely 'pos' or 'neg."""
 
 		sentiment = TextBlob(text, analyzer=NaiveBayesAnalyzer()).sentiment

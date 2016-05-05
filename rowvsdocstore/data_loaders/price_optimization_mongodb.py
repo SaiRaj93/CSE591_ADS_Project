@@ -1,14 +1,19 @@
 import os
-
 import datetime
 from bson.code import Code
 from mongodb_connect import Mongodb_Connect
 
 ip_files = ["web_sales", "web_returns", "warehouse", "item", "date_dim"]
 
-
-class Price_Optimizationn_Data_Mongodb(object):
+class Price_optimization_mongodb(object):
     def __init__(self):
+        # Performs SQL SUM
+        self.reducefuction = Code("""
+                            function(obj, prev){
+                                prev.sales_before = String(parseInt(prev.sales_before, 10)  + parseInt(obj.ws_sales_price,10) - 0);
+                                prev.sales_after = String(parseInt(prev.sales_after, 10)  + parseInt(obj.ws_sales_price,10) - 0);
+                                }
+                            """)
         self.client = Mongodb_Connect().get_client()
         self.db = self.client['PriceOptimizationMini']
 
@@ -156,154 +161,144 @@ class Price_Optimizationn_Data_Mongodb(object):
 
         file.close()
 
-    def get_review(self, key):
-        result = self.db.product_reviews.find_one({'id': key})
-        return result['review']
-
     def delete_docs(self):
-        self.db.product_reviews.drop()
 
+        self.db.web_sales.drop()
+        self.db.web_returns.drop()
+        self.db.warehouse.drop()
+        self.db.item.drop()
+        self.db.date_dim.drop()
+        self.db.web_sales_LOJ_web_returns.drop()
+        self.db.web_sales_LOJ_web_returns_where_clause_result.drop()
 
-def merge_two_dicts(x, y):
-    z = x.copy()
-    z.update(y)
-    return z
-    pass
+    def merge_two_dicts(self,x, y):
+        z = x.copy()
+        z.update(y)
+        return z
+        pass
 
+    def within_date_range(self,base_date, check_date, num_days):
+        lower_limit = base_date - datetime.timedelta(days=num_days)
+        upper_limit = base_date + datetime.timedelta(days=num_days)
+        if lower_limit <= check_date <= upper_limit:
+            return True
+        else:
+            return False
+        pass
 
-def within_date_range(base_date, check_date, num_days):
-    lower_limit = base_date - datetime.timedelta(days=num_days)
-    upper_limit = base_date + datetime.timedelta(days=num_days)
-    if lower_limit <= check_date <= upper_limit:
-        return True
-    else:
-        return False
-    pass
+    def executeQuery(self,po_obj):
+        os.chdir("..")
+        global ip_files
+        for f in ip_files:
+            ip_file_path = os.path.abspath(os.curdir) + "\input\\" + f + ".dat"
+            po_obj.load_data(ip_file_path, f)
+        pass
 
-# Performs SQL SUM
-reducefuction = Code("""
-                        function(obj, prev){
-                            prev.sales_before = String(parseInt(prev.sales_before, 10)  + parseInt(obj.ws_sales_price,10) - 0);
-                            prev.sales_after = String(parseInt(prev.sales_after, 10)  + parseInt(obj.ws_sales_price,10) - 0);
-                            }
-                        """)
+        # Join operation begin
+        web_sales = po_obj.db.get_collection('web_sales_mini')
+        web_returns = po_obj.db.get_collection('web_returns_mini')
+        po_obj.db.create_collection('web_sales_LOJ_web_returns_mini')
 
-if __name__ == "__main__":
-    os.chdir("..")
-    global ip_files
-    po_obj = Price_Optimizationn_Data_Mongodb()
-    for f in ip_files:
-        ip_file_path = os.path.abspath(os.curdir) + "\input\\" + f + ".dat"
-        po_obj.load_data(ip_file_path, f)
-    pass
+        for i in web_sales.find():
+            for j in web_returns.find():
+                if i['ws_item_sk'] == j['wr_item_sk'] and i['ws_item_sk'] == j['wr_item_sk']:
+                    try:
+                        del i['_id']
+                    except KeyError:
+                        pass
+                    try:
+                        del j['_id']
+                    except KeyError:
+                        pass
 
-    # Join operation begin
-    web_sales = po_obj.db.get_collection('web_sales_mini')
-    web_returns = po_obj.db.get_collection('web_returns_mini')
-    po_obj.db.create_collection('web_sales_LOJ_web_returns_mini')
+                    po_obj.db.web_sales_LOJ_web_returns_mini.insert_one(self.merge_two_dicts(i, j))
+        # # Join operation end
 
-    for i in web_sales.find():
-        for j in web_returns.find():
-            if i['ws_item_sk'] == j['wr_item_sk'] and i['ws_item_sk'] == j['wr_item_sk']:
-                try:
-                    del i['_id']
-                except KeyError:
-                    pass
-                try:
-                    del j['_id']
-                except KeyError:
-                    pass
+        # WHERE clause begin
+        web_sales_LOJ_web_returns = po_obj.db.get_collection('web_sales_LOJ_web_returns_mini')
+        if 'web_sales_LOJ_web_returns_where_clause_result_mini' in po_obj.db.collection_names():
+            po_obj.db.drop_collection('web_sales_LOJ_web_returns_where_clause_result_mini')
+        web_sales_LOJ_web_returns_where_clause_result_mini = po_obj.db.create_collection(
+            'web_sales_LOJ_web_returns_where_clause_result_mini')
+        warehouse_mini = po_obj.db.get_collection('warehouse')
+        item_mini = po_obj.db.get_collection('item')
+        date_dim_mini = po_obj.db.get_collection('date_dim')
+        count = 0
+        # print 'For loop start...'
+        row = 1
+        for i in web_sales_LOJ_web_returns.find({},{"ws_item_sk":1,"ws_warehouse_sk":1,"ws_sold_date_sk":1,"ws_sales_price":1,"wr_refunded_cash":1,"_id":0}):
+            print row
+            row = row+1
+            for j in item_mini.find({},{"i_item_sk":1,"i_item_id":1,"_id":0}):
+                if i['ws_item_sk'] == j['i_item_sk']:
+                    for k in warehouse_mini.find({},{"w_warehouse_sk":1,"w_state":1,"_id":0}):
+                        if i['ws_warehouse_sk'] == k['w_warehouse_sk']:
+                            for l in date_dim_mini.find({},{"d_date_sk":1,"d_date":1,"_id":0}):
+                                if i['ws_sold_date_sk'] == l['d_date_sk']:
+                                    base_date = datetime.datetime.strptime('2001-01-01', '%Y-%m-%d')
+                                    check_date = datetime.datetime.strptime(l['d_date'],'%Y-%m-%d')
+                                    if self.within_date_range(base_date,check_date,30):
+                                        attributes = [k['w_state'], j['i_item_id'], l['d_date'], i['ws_sales_price'],
+                                                      i['wr_refunded_cash']]
+                                        web_sales_LOJ_web_returns_where_clause_result_mini.insert_one({
+                                            'w_state': attributes[0],
+                                            'i_item_id': attributes[1],
+                                            'd_date': attributes[2],
+                                            'ws_sales_price': attributes[3],
+                                            'wr_refunded_cash': attributes[4]
+                                        })
+                                        count = count + 1
+                                        if count % 100 == 0:
+                                            print 'Found ' + str(count) + ' records'
+                                            # break
+        # WHERE clause end
 
-                po_obj.db.web_sales_LOJ_web_returns_mini.insert_one(merge_two_dicts(i, j))
-    # # Join operation end
+        # SELECT begin
+        res = po_obj.db.web_sales_LOJ_web_returns_where_clause_result_mini.group(
+            condition = {},
+            key={
+                "w_state": 1,
+                "i_item_id": 1
+            },
+            initial={
+                "sales_before":0,
+                "sales_after":0
+            },
+            reduce = self.reducefuction
+        )
+        # SELECT end
 
+        print res
 
-
-    # WHERE clause begin
-    web_sales_LOJ_web_returns = po_obj.db.get_collection('web_sales_LOJ_web_returns_mini')
-    if 'web_sales_LOJ_web_returns_where_clause_result_mini' in po_obj.db.collection_names():
-        po_obj.db.drop_collection('web_sales_LOJ_web_returns_where_clause_result_mini')
-    web_sales_LOJ_web_returns_where_clause_result_mini = po_obj.db.create_collection(
-        'web_sales_LOJ_web_returns_where_clause_result_mini')
-    warehouse_mini = po_obj.db.get_collection('warehouse')
-    item_mini = po_obj.db.get_collection('item')
-    date_dim_mini = po_obj.db.get_collection('date_dim')
-    count = 0
-    # print 'For loop start...'
-    row = 1
-    for i in web_sales_LOJ_web_returns.find({},{"ws_item_sk":1,"ws_warehouse_sk":1,"ws_sold_date_sk":1,"ws_sales_price":1,"wr_refunded_cash":1,"_id":0}):
-        print row
-        row = row+1
-        for j in item_mini.find({},{"i_item_sk":1,"i_item_id":1,"_id":0}):
-            if i['ws_item_sk'] == j['i_item_sk']:
-                for k in warehouse_mini.find({},{"w_warehouse_sk":1,"w_state":1,"_id":0}):
-                    if i['ws_warehouse_sk'] == k['w_warehouse_sk']:
-                        for l in date_dim_mini.find({},{"d_date_sk":1,"d_date":1,"_id":0}):
-                            if i['ws_sold_date_sk'] == l['d_date_sk']:
-                                base_date = datetime.datetime.strptime('2001-01-01', '%Y-%m-%d')
-                                check_date = datetime.datetime.strptime(l['d_date'],'%Y-%m-%d')
-                                if within_date_range(base_date,check_date,30):
-                                    attributes = [k['w_state'], j['i_item_id'], l['d_date'], i['ws_sales_price'],
-                                                  i['wr_refunded_cash']]
-                                    web_sales_LOJ_web_returns_where_clause_result_mini.insert_one({
-                                        'w_state': attributes[0],
-                                        'i_item_id': attributes[1],
-                                        'd_date': attributes[2],
-                                        'ws_sales_price': attributes[3],
-                                        'wr_refunded_cash': attributes[4]
-                                    })
-                                    count = count + 1
-                                    if count % 100 == 0:
-                                        print 'Found ' + str(count) + ' records'
-                                        # break
-    # WHERE clause end
-
-
-    # results = po_obj.db.things.group(key={"x":1}, condition={}, initial={"count": 0}, reduce=reducer)
-    res = po_obj.db.web_sales_LOJ_web_returns_where_clause_result_mini.group(
-        condition = {},
-        key={
-            "w_state": 1,
-            "i_item_id": 1
-        },
-        initial={
-            "sales_before":0,
-            "sales_after":0
-        },
-        reduce = reducefuction
-        # sales_after = co
-    )
-    print res
-
-"""
-PostgreSQL query:
-SELECT
-w_state , i_item_id
-,sum(case when (cast(d_date as date) <
-cast ('1998-03-16' as date))
-then ws_sales_price -
-coalesce (wr_refunded_cash ,0)
-else 0 end)
-as sales_before
-,sum(case when (cast(d_date as date) >=
-cast ('1998-03-16' as date))
-then ws_sales_price -
-coalesce (wr_refunded_cash ,0)
-else 0 end) as sales_after
-FROM
-web_sales left outer join web_returns on
-(ws_order_number = wr_order_number
-and ws_item_sk = wr_item_sk)
-,warehouse , item , date_dim
-WHERE
-i_item_sk = ws_item_sk
-and ws_warehouse_sk = w_warehouse_sk
-and ws_sold_date_sk = d_date_sk
-and d_date between
-(cast ('1998-03-16' as date) - interval '30
-day')
-and (cast ('1998-03-16' as date) + interval
-'30 day')
-GROUP by w_state ,i_item_id
-ORDER by w_state ,i_item_id;
-"""
+    """
+    PostgreSQL query:
+    SELECT
+    w_state , i_item_id
+    ,sum(case when (cast(d_date as date) <
+    cast ('1998-03-16' as date))
+    then ws_sales_price -
+    coalesce (wr_refunded_cash ,0)
+    else 0 end)
+    as sales_before
+    ,sum(case when (cast(d_date as date) >=
+    cast ('1998-03-16' as date))
+    then ws_sales_price -
+    coalesce (wr_refunded_cash ,0)
+    else 0 end) as sales_after
+    FROM
+    web_sales left outer join web_returns on
+    (ws_order_number = wr_order_number
+    and ws_item_sk = wr_item_sk)
+    ,warehouse , item , date_dim
+    WHERE
+    i_item_sk = ws_item_sk
+    and ws_warehouse_sk = w_warehouse_sk
+    and ws_sold_date_sk = d_date_sk
+    and d_date between
+    (cast ('1998-03-16' as date) - interval '30
+    day')
+    and (cast ('1998-03-16' as date) + interval
+    '30 day')
+    GROUP by w_state ,i_item_id
+    ORDER by w_state ,i_item_id;
+    """
