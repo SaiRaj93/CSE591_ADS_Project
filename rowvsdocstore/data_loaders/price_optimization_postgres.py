@@ -44,7 +44,8 @@ class Price_optimization_postgres(object):
                 icacls * /t  /grant Everyone:F
                 '''
                 #COPY warehouse FROM '/home/master/Desktop/cse591_adb_project/rowvsdocstore/data/warehouse.dat' DELIMITER '|';
-                query = "COPY " + f + " FROM '" + ip_file_path + "' DELIMITER '|';"
+                query = "COPY " + f + " FROM '" + ip_file_path + "' DELIMITER '|' CSV HEADER;"
+                print(query)
                 self.cur.execute(query)
                 self.con.commit()
                 if self.logging:
@@ -90,9 +91,9 @@ class Price_optimization_postgres(object):
         return self.cur.fetchall()
 
     def delete_schema(self):
-        global connection,ip_files,cursor,connection_string
+        
         drop_query = "DROP TABLE IF EXISTS "
-        for table in ip_files:
+        for table in self.ip_files:
             drop_query += table+", "
 
         drop_query += " CASCADE"

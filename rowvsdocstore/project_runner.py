@@ -39,20 +39,19 @@ class Project_Runner(object):
 		p_obj.load_data()
 		p_obj.execute_query()
 		p_obj.delete_schema()
-		pass
 
 	def postgres_price_optimization_query_response(self):
 		p_obj = Price_optimization_postgres()
 		result = p_obj.execute_query()
-		for row in result:
-			print row
-		pass
+		# for row in result:
+		# 	print row
+
 
 
 if __name__ == '__main__' :
-	Project_Runner().postgres_price_optimization_query_response()
+	#Project_Runner().postgres_price_optimization_query_response()
 	# code for running and collecting the statics
-	#start_time = time.time()
+	start_time = time.time()
 	#Project_Runner().postgres_sentiment_end_to_end('/home/master/Desktop/cse591_adb_project/rowvsdocstore/data/product_reviews_1.dat','800')
 	#Project_Runner().postgres_sentiment_end_to_end('/home/master/Desktop/cse591_adb_project/rowvsdocstore/data/product_reviews_10.dat','800')
 	#Project_Runner().postgres_sentiment_end_to_end('/home/master/Desktop/cse591_adb_project/rowvsdocstore/data/product_reviews_25.dat','800')
@@ -65,7 +64,8 @@ if __name__ == '__main__' :
 	#Project_Runner().mongodb_sentiment_end_to_end('/home/master/Desktop/cse591_adb_project/rowvsdocstore/data/product_reviews_50.dat','800')
 	#Project_Runner().mongodb_sentiment_end_to_end('/home/master/Desktop/cse591_adb_project/rowvsdocstore/data/product_reviews_75.dat','800')
 	#Project_Runner().mongodb_sentiment_end_to_end('/home/master/Desktop/cse591_adb_project/rowvsdocstore/data/product_reviews.dat','800')
-	#print(time.time() - start_time)
+	Project_Runner().postgres_price_optimization_end_to_end()
+	print(time.time() - start_time)
 	# file = '/home/master/Desktop/cse591_adb_project/rowvsdocstore/data/product_reviews.dat'
 	# keys = ['800','9126','15247', '23900', '33456', '46324', '53672', '66781', '72389', '83246']
 
@@ -94,4 +94,3 @@ if __name__ == '__main__' :
 	# m_obj.delete_docs()
 	# print('Average mongodb ' + str(sum(times)/len(times)))
 	# print(times)
-	pass
