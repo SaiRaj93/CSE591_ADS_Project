@@ -175,7 +175,7 @@ class Price_optimization_mongodb(object):
         z = x.copy()
         z.update(y)
         return z
-        pass
+
 
     def within_date_range(self,base_date, check_date, num_days):
         lower_limit = base_date - datetime.timedelta(days=num_days)
@@ -184,7 +184,7 @@ class Price_optimization_mongodb(object):
             return True
         else:
             return False
-        pass
+
 
     def executeQuery(self,po_obj):
         os.chdir("..")
@@ -192,7 +192,7 @@ class Price_optimization_mongodb(object):
         for f in ip_files:
             ip_file_path = os.path.abspath(os.curdir) + "\input\\" + f + ".dat"
             po_obj.load_data(ip_file_path, f)
-        pass
+
 
         # Join operation begin
         web_sales = po_obj.db.get_collection('web_sales_mini')
@@ -205,11 +205,11 @@ class Price_optimization_mongodb(object):
                     try:
                         del i['_id']
                     except KeyError:
-                        pass
+                
                     try:
                         del j['_id']
                     except KeyError:
-                        pass
+                
 
                     po_obj.db.web_sales_LOJ_web_returns_mini.insert_one(self.merge_two_dicts(i, j))
         # # Join operation end
